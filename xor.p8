@@ -18,6 +18,15 @@ function _init()
  curplayer = magus
  playerx = 8
  playery = 2
+ oldx = 8
+ oldy = 2
+ offsetx = 0
+ offsety = 0 
+ xs = 0
+ xe = 7
+ ys = 0
+ ye = 7
+
  
  --this turn
  moves = 0
@@ -68,12 +77,12 @@ end
 
 function _draw()
  if mode == modelarge then
- 	if(mapscrolling) then
+ 	--if(mapscrolling) then
  	 cls()
  	 drawmaze()
- 	else
+ 	--else
 	  drawlargeplayer()
-	 end
+	 --end
 	else
 	 drawsmall()
   drawmaze() 
@@ -114,8 +123,15 @@ end
 --draws either small or large
 --maze
 function drawmaze()
- for x=0,7 do
-  for y=0,7 do
+ --we have to add an extra col
+ --or row for the maze that is
+ --coming into view
+
+ --test direction
+ if (d == 
+ 
+ for x=xs,xe do
+  for y=ys,ye do
   	if(mapx + x == -1 
   	or mapx + x == 30
    or mapy + y == -1
@@ -125,8 +141,17 @@ function drawmaze()
     s = mget(mapx+x, mapy+y)
    end
    if(mode==modelarge) then
-   	if(s > 0) drawtile(tilemap[s], x*16, y*16)
-	  else -- can just draw
+   	if(s > 0 and s != curplayer) then
+   		local tx = x*16
+   		local ty = y*16
+   	 if (mapscrolling) then
+   	 	tx += offsetx
+   	 	ty += offsety
+   	 end
+					drawtile(tilemap[s], tx, ty)
+				
+				end
+	  else -- small, can just draw
 	   if(s > 0) spr(s, (x+1)*8, (y+6)*8)
 	  end
   end
@@ -141,16 +166,16 @@ function drawtile(s, x, y)
 end
 
 function drawlargeplayer()
- xoff = 0
- yoff = 0
- if (ismoving and movedir == left) xoff = 16 - animframe
- if (ismoving and movedir == right) xoff = (16 - animframe) * -1
- if (ismoving and movedir == up) yoff = 16 - animframe
- if (ismoving and movedir == down) yoff = (16 - animframe) * -1
+ local moldx = (playerx-mapx)*16
+ local moldy =	(playery-mapy)*16
+
+	--if (ismoving and not mapscrolling) then
+	-- moldx -= offsetx
+	-- moldy -= offsety
+	--end
  
- drawtile(tilemap[curplayer], 
- 								((playerx-mapx)*16)+xoff,
- 								((playery-mapy)*16)+yoff)
+ drawtile(tilemap[curplayer],moldx,moldy)
+ 
 end
 
 --draw the screen for the small map
@@ -241,8 +266,11 @@ function updatemove()
  --switch modes
  if (btnp(4) or btnp(5)) mode *= -1
 
+ oldx = playerx
+ oldy = playery
+ 
  -- can the player move in that direction?
- if (btn(0) and playerx > 0 and canmove(playerx-1, playery, 0)) then
+ if (btn(0) and playerx > 0 and canmove(playerx-1, playery, 0)) then 
   playerx -= 1
   moveto(left)
  end
@@ -281,6 +309,17 @@ end
 
 function updateanim()
  animframe += 4
+ 
+ if(movedir == left) then
+		offsetx = animframe
+	elseif(movedir == right) then
+	 offsetx = animframe * -1
+	elseif(movedir == up) then
+	 offsety = animframe
+	elseif(movedir == down) then
+	 offsety = animframe * -1
+	end
+
  if (animframe == 16) then
   ismoving = false
  end
@@ -291,6 +330,12 @@ function moveto(d)
   ismoving = true
   movedir = d
   animframe = 0
+  offsetx = 0
+		offsety = 0
+		  
+  --remove old player
+  mset(oldx, oldy, 0)
+  mset(playerx, playery, curplayer)
 end
 
 function canmove(cx, cy, d)
