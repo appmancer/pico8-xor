@@ -32,8 +32,8 @@ function _init()
  
  --tile properties
  pushable = 2
- fallleft = 8
- falldown = 16
+ fallleft = 3
+ falldown = 4
  fpriority = fallleft
  
  --falling tiles
@@ -132,8 +132,11 @@ end
 function drawdebug()
 	rectfill(0,96,128,128,0)
 	local playerx, playery = tocoords(playerpos)
-	print("px:"..playerx, 2, 110, 5)
-	print("py:"..playery, 2, 120, 5)
+	print("px:"..playerx, 2, 100, 5)
+	print("py:"..playery, 30, 100, 5)
+	print("mx:"..mapx, 2, 110, 5)
+	print("my:"..mapy, 30, 110, 5)
+
 end
 -->8
 --***************************
@@ -158,8 +161,7 @@ function drawlargemaze()
   	 --	tx += offsetx
   	 --	ty += offsety
   	 --end
-  	 printh("printing tile "..s)
-  		drawtile(tilemap[s], tx, ty)
+  	 drawtile(tilemap[s], tx, ty)
 			end
   end
  end
@@ -184,9 +186,7 @@ function getmappiece(xpos,ypos)
   --pos is 0 based, map is 1 based
   local tpx = mapx+xpos
   local tpy = mapy+ypos
-  printh("getting piece at "..tpx..","..tpy)
   s = mget(tpx, tpy)
-  printh("got piece:"..s)
  end
  
  return s 
@@ -211,7 +211,6 @@ function drawplayer()
 	-- moldy += offsety * -1
 	--end
  if(mode == modelarge) then
-  printh("drawing player "..curplayer)
   drawtile(tilemap[curplayer],moldx,moldy)
  else
   --drawsmall
@@ -311,7 +310,7 @@ function tileat(pos)
  return mget(tx, ty)
 end
 
-function settile(s, pos)
+function settile(pos, s)
  local tx, ty = tocoords(pos)
  return mset(tx, ty, s)
 end
@@ -410,6 +409,7 @@ end
 --edge of the map
 function atedge(pos, d)
  local isedge = false
+
   if(d == left 
      and pos % mapsize == 0) then
    isedge = true
@@ -423,7 +423,7 @@ function atedge(pos, d)
    isedge = true
    printh("pos is on top side")
   elseif(d == down 
-     and (pos \ mapsize) == mapsize) then
+     and (pos \ mapsize) == mapsize-1) then
    isedge = true
    printh("pos is on bottom side")
   end  
@@ -431,24 +431,34 @@ function atedge(pos, d)
 end
 
 --returns true if something
---can move to pos in the 
---direction d
-function canmove(pos, d)
+--can move from pos 
+--in the direction d
+function canmove(pos,  d)
  local isvalid = false
  
+ printh("check for edge")
  --are we at the edge of the map?
  if(not atedge(pos, d)) then
+  printh("not on edge")
+  
+  local newpos = pos + getoffset(d)
   --can we move into the tile
   --in the direction
-  local s = tileat(pos)
+  local s = tileat(newpos)
+  
+  printh("content of tile:"..s)
   
   --is the tile enterable?
   if(d == left or d == right) then
+   printh("moving horizontally") 
    if(fget(s, 0)) then
     isvalid = true
+    printh("move is okay")
    end
   elseif(d == up or d == down) then
+   printh("moving horizontally") 		
  		if(fget(s, 1)) then
+ 		 printh("move is okay")
  		 isvalid = true
  		end
   end 
@@ -462,10 +472,12 @@ end
 --tile can be pushed
 function move(pos, d)
  local newpos = pos + getoffset(d)
- 
+ local tx, ty = tocoords(newpos)
+ printh("moving to x:"..tx..","..ty)
  --check that we can move to
  --new position
  if(canmove(pos,d)) then
+  printh("can move")
   --nice and simple, update pos
   moveplayer(d)
  end
@@ -511,12 +523,15 @@ function moveplayer(d)
 end
 
 --moves a non-player tile
+--returns new position
 function movetile(pos, d)
  local newpos = pos + getoffset(d)
  local s = tileat(pos)
  settile(pos, space)
  settile(newpos, s)
-end
+ 
+ return newpos
+end 
 -->8
 --*********************
 --* falling
@@ -542,10 +557,11 @@ end
 
 --can the tile at pos fall left
 function canfallleft(pos)
- if(not isedge(oldpos, left)) then
+ if(not atedge(pos, left)) then
 		local s = tileat(pos)
 		if(fget(s, fallleft)) then
 			--this tile can fall
+			printh("tile is falling")
 			add(fallingleft, pos)
 		end
 	end
@@ -553,10 +569,11 @@ end
 
 --can the tile at pos fall down?
 function canfalldown(pos)
-	if(not isedge(pos, up)) then
+	if(not atedge(pos, up)) then
 		local s = tileat(pos)
 		if(fget(s, falldown)) then
 			--this tile can fall
+			printh("tile is falling")
 			add(fallingdown, pos)
 		end
 	end
@@ -615,7 +632,14 @@ end
 function push(pos, d)
  local pushed = canpush(pos, d)
  if(pushed) then
-  movetile(pos,d)
+  local newpos = movetile(pos,d)
+  
+  --can the pushed tile fall?
+  if(d == left or d == right) then
+   canfalldown(newpos)
+  else
+   canfallleft(newpos)
+  end
  end 
  
  return pushed
@@ -627,9 +651,17 @@ end
 function canpush(pos, d)
  local pushed = false
  
+ --can only push items with 
+ --flag 2 set
+ local s = tileat(pos)
+ if(not fget(s, 2)) then
+  return false
+ end
+ 
  if(not atedge(pos, d)) then
+  --we need the next tile now
   local newpos = pos + getoffset(d)
-  local s = tileat(newpos)
+  s = tileat(newpos)
   if(s == space) then
    pushed = true
   elseif(s == dots 
@@ -735,8 +767,8 @@ __map__
 4844004000404844004040404040404040404040400040484000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 4844004000400044004048404800000000000000400040404000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 4844004000400044004000404040434343434000400040484000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-4844004045400044000000000000000000004000400040004000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-4040004044400040004000404840400040004000400040004000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+4844004000400044000000000000000000004000400040004000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+4040004044400040004000404040400040004000400040004000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0040004000400040004000404040484800000000000044000000440040470000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0040004000400040004048404840004840004000400040004000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0040004000400040004040400040404040004000400040004000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
