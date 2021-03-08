@@ -1,29 +1,24 @@
 pico-8 cartridge // http://www.pico-8.com
 version 30
 __lua__
+--*************************
+--* init and setup
+--************************
+
 function _init()
  --map
  modelarge = -1
  modesmall = 1
  mode = modelarge
- mapx = 3
- mapy = 1
- animx = 0
- animy = 0
- mapsize = 28
+ mapx = 2
+ mapy = -1
+ mapsize = 30 --w/h
  
  --player
  magus = 70 --sprite
  questor = 71 --sprite
  curplayer = magus
- playerx = 8
- playery = 2
- oldx = 8
- oldy = 2
- offsetx = 0
- offsety = 0 
- xs = -1
- xe = 8
+ playerpos = 68
  
  --this turn
  moves = 0
@@ -37,12 +32,22 @@ function _init()
  
  --tile properties
  pushable = 2
+ fallleft = 8
+ falldown = 16
+ fpriority = fallleft
+ 
+ --falling tiles
+ fallingleft = {}
+ fallingdown = {}
  
  --constants
  left = 0
  right = 1
  up = 2
  down = 3
+ 
+ --falling fieces
+ fp = {}
  
  --level data
  levels={}
@@ -51,32 +56,29 @@ function _init()
  l1={}
  l1["index"] = "01"
  l1["name"] = "dots and waves"
- l1["magusx"] = 8
- l1["magusy"] = 2
- l1["questorx"] = 29
- l1["questory"] = 14
- l1["magusmx"] = 3
- l1["magusmy"] = 1
- l1["questormx"] = 22
- l1["questormy"] = 10
+ l1["maguspos"] = 68
+ l1["questorpos"] = 449
+ l1["magusmapx"] = 0
+ l1["magusmapy"] = 0
+ l1["questormapx"] = 22
+ l1["questormapy"] = 10
  l1["wall"] = 64 --brick
  
- levels[1]=l1
+ levels[1]=l1s
  
  --todo - copy the data this
  --must not destroy level data
  currlevel = l1
 
 	initmapping()
-
- --temp values - delete
- flagdebug = 0
+	
+	printh("started")
 end
 
-function _update60()
+function _update()
  if (ismoving) then
   updateanim()
- else
+ elseif (not updatefalling()) then
   updatemove()
  end 
 end
@@ -85,13 +87,13 @@ function _draw()
  cls()
  if mode == modelarge then
 	 drawlargemaze()
-  drawlargeplayer()
+  drawplayer()
 	else
 	 drawsmall()
   drawsmallmaze() 
   drawmap()
 	 drawmoves()
-	 drawsmallplayer()
+	 drawplayer()
 	end
 	
 	--drawdebug()
@@ -101,7 +103,10 @@ end
 --this converts the small to 
 --large tiles
 function initmapping()
- chickem = 75
+ space = 0
+ dots = 67
+ waves = 68
+ chicken = 75
  fish = 74
  frown = 73
  mask = 72
@@ -126,10 +131,14 @@ end
 
 function drawdebug()
 	rectfill(0,96,128,128,0)
+	local playerx, playery = tocoords(playerpos)
 	print("px:"..playerx, 2, 110, 5)
 	print("py:"..playery, 2, 120, 5)
 end
 -->8
+--***************************
+--* drawing
+--***************************
 
 --draws either small or large
 --maze
@@ -137,18 +146,20 @@ function drawlargemaze()
  --we have to add an extra col
  --or row for the maze that is
  --coming into view
- 
- for x=xs,xe do
-  for y=xs,xe do
+ for x=0, 7 do
+  for y=0, 7 do
 			s = getmappiece(x,y)
-  	if(s > 0 and s != curplayer) then
+			
+  	--if(s > 0 and s != curplayer) then
+  	if(s >0) then
   		local tx = x*16
   		local ty = y*16
-  	 if (mapscrolling) then
-  	 	tx += offsetx
-  	 	ty += offsety
-  	 end
-				drawtile(tilemap[s], tx, ty)
+  	 --if (mapscrolling) then
+  	 --	tx += offsetx
+  	 --	ty += offsety
+  	 --end
+  	 printh("printing tile "..s)
+  		drawtile(tilemap[s], tx, ty)
 			end
   end
  end
@@ -170,7 +181,12 @@ function getmappiece(xpos,ypos)
  or mapy + ypos == 30) then 
  	s = currlevel["wall"]
  else
-  s = mget(mapx+xpos, mapy+ypos)
+  --pos is 0 based, map is 1 based
+  local tpx = mapx+xpos
+  local tpy = mapy+ypos
+  printh("getting piece at "..tpx..","..tpy)
+  s = mget(tpx, tpy)
+  printh("got piece:"..s)
  end
  
  return s 
@@ -183,18 +199,26 @@ function drawtile(s, x, y)
  spr(s+17, x+8, y+8)
 end
 
-function drawlargeplayer()
+function drawplayer()
+ local playerx, playery = tocoords(playerpos)
  local moldx = (playerx-mapx)*16
  local moldy =	(playery-mapy)*16
-
-	if (ismoving and not mapscrolling) then
-	if (ismoving and not mapscrolling) then
-	 moldx += offsetx * -1 --offset is opposite
-	 moldy += offsety * -1
-	end
  
- drawtile(tilemap[curplayer],moldx,moldy)
- 
+ local tx = playerx-mapx
+ local ty = playery-mapy
+	--if (ismoving and not mapscrolling) then
+	-- moldx += offsetx * -1 --offset is opposite
+	-- moldy += offsety * -1
+	--end
+ if(mode == modelarge) then
+  printh("drawing player "..curplayer)
+  drawtile(tilemap[curplayer],moldx,moldy)
+ else
+  --drawsmall
+  spr(curplayer, 
+   (1+playerx-mapx)*8, 
+   (6+playery-mapy)*8)
+ end
 end
 
 --draw the screen for the small map
@@ -226,12 +250,6 @@ function drawsmall()
  spr(124,100,20)
  spr(125,108,20)
 end
-
-function drawsmallplayer()
- spr(curplayer, 
- 				(1+playerx-mapx)*8, 
- 				(6+playery-mapy)*8)
-end 
 
 --if the player has map tiles, show them
 function drawmap()
@@ -280,6 +298,36 @@ function drawmoves()
  print(found, 107, 106)
 end
 -->8
+--***************************
+--* moving player and map
+--***************************
+
+function tocoords(pos)
+	return pos % mapsize, pos \ mapsize
+end
+
+function tileat(pos)
+ local tx, ty = tocoords(pos)
+ return mget(tx, ty)
+end
+
+function settile(s, pos)
+ local tx, ty = tocoords(pos)
+ return mset(tx, ty, s)
+end
+
+function getoffset(d)
+ local offset = -1
+ if(d == right) then
+  offset = 1
+ elseif(d == up) then
+  offset = -mapsize
+ elseif(d == down) then
+  offset = mapsize
+ end
+ return offset
+end
+
 function updatemove()
  --switch modes
  if (btnp(4)) mode *= -1
@@ -287,47 +335,42 @@ function updatemove()
  --change player
  if (btnp(5)) then
  	if(curplayer == magus) then
- 	 currlevel["magusx"] = playerx
- 	 currlevel["magusy"] = playery
- 	 currlevel["magusmx"] = mapx
- 	 currlevel["magusmy"] = mapy
- 	 playerx = currlevel["questorx"]
- 	 playery = currlevel["questory"]
- 	 mapx = currlevel["questormx"]
- 	 mapy = currlevel["questormy"]
+ 	 currlevel["maguspos"] = playerpos
+ 	 currlevel["magusmapx"] = mapx
+ 	 currlevel["magusmapy"] = mapy
+ 	 playerpos = currlevel["questorpos"]
+ 	 mapx = currlevel["questormapx"]
+ 	 mapy = currlevel["questormapy"]
  	 curplayer = questor
  	else --questor
- 	 currlevel["questorx"] = playerx
- 	 currlevel["questory"] = playery
- 	 currlevel["questormx"] = mapx
- 	 currlevel["questormy"] = mapy
-   playerx = currlevel["magusx"]
- 	 playery = currlevel["magusy"]
- 	 mapx = currlevel["magusmx"]
- 	 mapy = currlevel["magusmy"]
+ 	 currlevel["questorpos"] = playerpos
+ 	 currlevel["questormapx"] = mapx
+ 	 currlevel["questormapy"] = mapy
+   playerpos = currlevel["maguspos"]
+ 	 mapx = currlevel["magusmapx"]
+ 	 mapy = currlevel["magusmapy"]
  	 curplayer = magus
  	end
  end
-
- oldx = playerx
- oldy = playery
  
- -- can the player move in that direction?
- if (btn(0) and playerx > 0 and canmove(playerx-1, playery, 0)) then 
-  playerx -= 1
-  moveto(left)
- elseif (btn(1) and playerx < 29 and canmove(playerx+1, playery, 0)) then
-  playerx += 1
-  moveto(right)
- elseif (btn(2) and playery > 0 and canmove(playerx, playery-1, 1)) then
-  playery -= 1
-  moveto(up)
- elseif (btn(3) and playery < 29 and canmove(playerx, playery+1, 1)) then
-  playery += 1
-  moveto(down)
+ if (btn(0)) then 
+  playerleft()
+ elseif (btn(1)) then
+  playerright()
+ elseif (btn(2)) then
+  playerup()
+ elseif (btn(3)) then
+  playerdown()
  end
  
+ --check to see if we need to
+ --scroll the map
+ scrollmap()
+end
+
+function scrollmap() 
  mapscrolling = false
+ local playerx, playery = tocoords(playerpos)
  --does the map need to scroll?
  if((playerx == mapx) and mapx>-1) then
   mapx -= 1
@@ -347,78 +390,269 @@ function updatemove()
  end
 end
 
-function updateanim()
- animframe -= 4
- 
- if(movedir == left) then
-		offsetx = animframe * -1
-	elseif(movedir == right) then
-	 offsetx = animframe
-	elseif(movedir == up) then
-	 offsety = animframe * -1
-	elseif(movedir == down) then
-	 offsety = animframe
-	end
-
- if (animframe <= 0) then
-  ismoving = false
- end
+function playerleft()
+ move(playerpos, left)
 end
 
-function moveto(d)
-  --what am i moving into?
-  target = mget(playerx, playery)
-  
-  if(target == chicken) then
-   
-  elseif(target == fish) then
-  
-  elseif(target == frown) then
-  
-  elseif(target == mask) then
-  	--score a point
-  	found += 1
-  end
-
-  moves += 1
-  ismoving = true
-  movedir = d
-  animframe = 16
-  offsetx = 0
-		offsety = 0
-		  
-  --remove old player
-  mset(oldx, oldy, 0)
-  mset(playerx, playery, curplayer)
-
-		--update animframe
-		updateanim()
+function playerright()
+ move(playerpos, right)
 end
 
---can the player move to this
-function canmove(cx, cy, d)
+function playerup()
+ move(playerpos, up)
+end
+
+function playerdown()
+ move(playerpos, down)
+end
+
+--true if the position is on the
+--edge of the map
+function atedge(pos, d)
+ local isedge = false
+  if(d == left 
+     and pos % mapsize == 0) then
+   isedge = true
+   printh("pos is on left side")
+  elseif(d == right
+     and pos % mapsize == mapsize-1) then
+   isedge = true
+   printh("pos is on right side")
+  elseif(d == up 
+     and pos < mapsize) then
+   isedge = true
+   printh("pos is on top side")
+  elseif(d == down 
+     and (pos \ mapsize) == mapsize) then
+   isedge = true
+   printh("pos is on bottom side")
+  end  
+ return isedge
+end
+
+--returns true if something
+--can move to pos in the 
+--direction d
+function canmove(pos, d)
  local isvalid = false
- local s = mget(cx, cy)
- flagdebug = fget(s,d)
- --if the direction matches the flag
- if(fget(s, d)) isvalid = true
  
- --okay, its not immovable, but
- --can it move?
- if(isvalid) then
-  if(fget(s, pushable)) then
-   --this tile is pushable, but
-   --is there space to push it?
-   isvalid = ispushable()
-  end
+ --are we at the edge of the map?
+ if(not atedge(pos, d)) then
+  --can we move into the tile
+  --in the direction
+  local s = tileat(pos)
+  
+  --is the tile enterable?
+  if(d == left or d == right) then
+   if(fget(s, 0)) then
+    isvalid = true
+   end
+  elseif(d == up or d == down) then
+ 		if(fget(s, 1)) then
+ 		 isvalid = true
+ 		end
+  end 
  end
  
  return isvalid
 end
 
---is the target pushable
-function ispushable()
- return true
+--see if we can move the player
+--into position, or if another
+--tile can be pushed
+function move(pos, d)
+ local newpos = pos + getoffset(d)
+ 
+ --check that we can move to
+ --new position
+ if(canmove(pos,d)) then
+  --nice and simple, update pos
+  moveplayer(d)
+ end
+ 
+ --not free, but can we push?
+ if(push(newpos,d)) then
+  moveplayer(d)
+ end
+end
+
+--move the player in the
+--specified direction
+function moveplayer(d)
+ local newpos = playerpos + getoffset(d)
+ local s = tileat(newpos)
+ 
+ settile(playerpos, space)
+ settile(newpos, curplayer)
+
+ local oldpos = playerpos
+ playerpos = newpos
+ 
+ --perform any action for
+ --taking this tile  
+ takenpiece(s)
+
+ --check to see something can
+ --fall into the vacated space
+ canfallinto(oldpos, d)
+ 
+ --update the moves counter
+ moves += 1
+ 
+ --if we are moving horizontally
+ --ensure that items falling
+ --vertically get processed 
+ --first
+ if(d == left or d == right) then
+  fpriority = fallingdown
+ else --horizontally
+  fpriority = fallingleft
+ end
+end
+
+--moves a non-player tile
+function movetile(pos, d)
+ local newpos = pos + getoffset(d)
+ local s = tileat(pos)
+ settile(pos, space)
+ settile(newpos, s)
+end
+-->8
+--*********************
+--* falling
+--*********************
+
+--check to see if something
+--can fill this space now
+function canfallinto(pos, d)
+ local tpos = pos
+	if(d == left or d == right) then
+  --are we on the top row?
+  if(not atedge(pos, up)) then
+   canfalldown(pos + getoffset(up))
+  end
+  
+  --if we are moving left, can
+  --something fall left?
+  if(d == left and not atedge(right)) then
+   canfallleft(pos + getoffset(right))
+  end
+ end
+end
+
+--can the tile at pos fall left
+function canfallleft(pos)
+ if(not isedge(oldpos, left)) then
+		local s = tileat(pos)
+		if(fget(s, fallleft)) then
+			--this tile can fall
+			add(fallingleft, pos)
+		end
+	end
+end
+
+--can the tile at pos fall down?
+function canfalldown(pos)
+	if(not isedge(pos, up)) then
+		local s = tileat(pos)
+		if(fget(s, falldown)) then
+			--this tile can fall
+			add(fallingdown, pos)
+		end
+	end
+end
+
+--update each falling piece
+function updatefalling()
+ local hasfallendown = false
+ 
+ if(fpriority == fallingdown) then
+  hasfallendown = updatefalldown()
+  hasfallenleft = updatefallleft()
+ else
+  hasfallenleft = updatefallleft()
+  hasfallendown = updatefalldown()
+ end
+ return hasfallenleft or hasfallendown
+end
+
+function updatefalldown()
+ return updatefall(fallingdown, down)
+end
+
+function updatefallleft()
+ return updatefall(fallingleft, left)
+end
+
+function updatefall(set, d)
+ local hasfallen = false
+ for pos in all(set) do
+  if(canmove(pos, d)) then
+   movetile(pos, d)
+   --remove the old position
+   --and add the new one
+   add(set, 
+   			 pos+getoffset(d))
+   
+   hasfallen = true
+   
+   --check to see if we have 
+   --set something else falling
+   canfallinto(pos, d)
+  end   
+  --we always remove this item
+  del(set, pos)
+ end
+ 
+ return hasfallen
+end
+-->8
+--***************************
+--* pushing
+--***************************
+--push the tile at pos in the
+--direction of d
+function push(pos, d)
+ local pushed = canpush(pos, d)
+ if(pushed) then
+  movetile(pos,d)
+ end 
+ 
+ return pushed
+end
+
+--return true only if next tile
+--is empty or valid forcefield
+--you cannot push two items
+function canpush(pos, d)
+ local pushed = false
+ 
+ if(not atedge(pos, d)) then
+  local newpos = pos + getoffset(d)
+  local s = tileat(newpos)
+  if(s == space) then
+   pushed = true
+  elseif(s == dots 
+    and (d == left or d == right)) then
+ 	 pushed = true
+ 	elseif(s == waves
+ 	  and (d == up or d == down)) then
+ 	 pushed = true
+ 	end 
+ end
+ 
+ return pushed
+end
+-->8
+--************************
+--* tile actions
+--************************
+function takenpiece(p)
+ if(p == mask) then
+ 	found += 1
+ elseif(p == frown) then
+  
+ end
 end
 __gfx__
 000000008880f8888880f8888888808888808888007777000011111100000005000000051224442210033300cccccccccccccccc0ccccccccccccc7000000000
@@ -486,12 +720,12 @@ fffffff008888088600999001111111170770700c777777c00ccc90000ccc9000700079000777900
 00000000000000000000000000000000000000000000000000000000000000000000000000000000077000007000077000770007700007000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000777770077770007777700077770077700000000000000000
 __gff__
-0300000000000001010202030300000000000000000000010102020303000000000000000003030000070707070303000000000000030300000707070703030080808001020300004303040400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0300000000000001010202030300000000000000000000010102020303000000000000000003030000070707070303000000000000030300000707070703030080808001020300004303140c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0040404040404040404043404040404040404040404040404040404040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0040484400004500464000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0040484443004500464000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0040480000000040404000404040404040404040404040404040400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00404040000000480000004a0000000000000000000000000000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000004000404040404043404040404040404040404045404000400040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
