@@ -1,7 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 30
 __lua__
---*************************
+`--*************************
 --* init and setup
 --************************
 
@@ -68,6 +68,10 @@ function _init()
  playerpos = currlevel["maguspos"]
  mapx = currlevel["magusmapx"]
  mapy = currlevel["magusmapy"]
+	
+	--animation
+	offsetx = 0
+	offsety = 0 
 	
 	printh("started")
 end
@@ -256,10 +260,10 @@ function drawlargemaze()
   	if(s >0) then
   		local tx = x*16
   		local ty = y*16
-  	 --if (mapscrolling) then
-  	 --	tx += offsetx
-  	 --	ty += offsety
-  	 --end
+  	 if (mapscrolling) then
+  	 	tx += offsetx
+  	 	ty += offsety
+  	 end
   	 --don't draw the wall 
   	 --if the lights are off
   	 if(lightson or not fget(s, invisible)) then
@@ -309,10 +313,10 @@ function drawplayer()
  
  local tx = playerx-mapx
  local ty = playery-mapy
-	--if (ismoving and not mapscrolling) then
-	-- moldx += offsetx * -1 --offset is opposite
-	-- moldy += offsety * -1
-	--end
+	if (ismoving and not mapscrolling) then
+	 moldx += offsetx * -1 --offset is opposite
+	 moldy += offsety * -1
+	end
  if(mode == modelarge) then
   drawtile(tilemap[curplayer],moldx,moldy)
  else
@@ -815,7 +819,6 @@ end
 --hit piece p
 function hitpiece(p,pos)
  if(p == bomb) then
-  printh("boom!")
   detonate(pos, left)
  elseif(p == poison) then
   detonate(pos, up)
@@ -837,10 +840,10 @@ function detonate(pos, d)
  end
  
  --destroy tiles at p0, p1, p2
+ destroytile(pos)
  destroytile(pos+p0)
  destroytile(pos+p1)
  destroytile(pos+p2)
- destroytile(pos)
  
  --todo: special effect
 end
