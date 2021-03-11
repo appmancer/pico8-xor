@@ -1,7 +1,7 @@
 pico-8 cartridge // http://www.pico-8.com
 version 30
 __lua__
-`--*************************
+--*************************
 --* init and setup
 --************************
 
@@ -27,7 +27,6 @@ function _init()
  
  --temporaray flags
  ismoving = false
- animframe = 0
  mapscrolling = true
  lightson = true
  
@@ -72,11 +71,12 @@ function _init()
 	--animation
 	offsetx = 0
 	offsety = 0 
+ animframe = 0
 	
 	printh("started")
 end
 
-function _update()
+function _update60()
  if (ismoving) then
   updateanim()
  elseif (not updatefalling()) then
@@ -239,7 +239,8 @@ function drawdebug()
 	print("py:"..playery, 30, 100, 5)
 	print("mx:"..mapx, 2, 110, 5)
 	print("my:"..mapy, 30, 110, 5)
-
+ print("ox:"..offsetx, 60, 100, 5)
+ print("oy:"..offsety, 90, 100, 5)
 end
 -->8
 --***************************
@@ -252,8 +253,8 @@ function drawlargemaze()
  --we have to add an extra col
  --or row for the maze that is
  --coming into view
- for x=0, 7 do
-  for y=0, 7 do
+ for x=-1, 8 do
+  for y=-1, 8 do
 			s = getmappiece(x,y)
 			
   	--if(s > 0 and s != curplayer) then
@@ -264,11 +265,15 @@ function drawlargemaze()
   	 	tx += offsetx
   	 	ty += offsety
   	 end
-  	 --don't draw the wall 
-  	 --if the lights are off
-  	 if(lightson or not fget(s, invisible)) then
-  	  drawtile(tilemap[s], tx, ty)
-  	 end 
+  	 --don't draw the current
+  	 --player token
+  		if(s ~= curplayer) then
+		   --don't draw the wall 
+	  	 --if the lights are off
+				 if(lightson or not fget(s, invisible)) then
+	  	  drawtile(tilemap[s], tx, ty)
+	  	 end 
+	  	end
 			end
   end
  end
@@ -388,7 +393,7 @@ function drawmoves()
   m = "000"
  elseif (moves<100) then
   m = "00"
- else 
+ elseif (moves<1000) then 
   m = "0"
  end
  
@@ -608,7 +613,7 @@ function moveplayer(d)
 
  local oldpos = playerpos
  playerpos = newpos
- 
+
  --perform any action for
  --taking this tile  
  takenpiece(s)
@@ -629,6 +634,13 @@ function moveplayer(d)
  else --horizontally
   fpriority = fallingleft
  end
+ 
+ ismoving = true
+ animframe = 16
+ offsetx = 0
+ offsety = 0
+ movedir = d
+ updateanim()
 end
 
 --moves a non-player tile
@@ -641,6 +653,24 @@ function movetile(pos, d)
  
  return newpos
 end 
+
+function updateanim()
+ animframe -= 4
+ 
+ if(movedir == left) then
+		offsetx = animframe * -1
+	elseif(movedir == right) then
+	 offsetx = animframe
+	elseif(movedir == up) then
+	 offsety = animframe * -1
+	elseif(movedir == down) then
+	 offsety = animframe
+	end
+
+ if (animframe <= 0) then
+  ismoving = false
+ end
+end
 -->8
 --*********************
 --* falling
@@ -734,7 +764,7 @@ function updatefall(set, d)
    --we've bumped into something
    local hitpos = pos+getoffset(d)
    local hit = tileat(hitpos)
-   hitpiece(hit, hitpos)
+   hitpiece(hit, hitpos, pos)
   end   
   --we always remove this item
   del(set, pos)
@@ -815,13 +845,13 @@ function takenpiece(p)
  end
 end
 
---something falling has 
---hit piece p
-function hitpiece(p,pos)
+--something falling (src) has 
+--hit piece p at tile pos
+function hitpiece(p,pos,src)
  if(p == bomb) then
-  detonate(pos, left)
+  detonate(pos, src, left)
  elseif(p == poison) then
-  detonate(pos, up)
+  detonate(pos, src, up)
  elseif(p == questor) then
   --die
  elseif(p == magus) then
@@ -829,21 +859,19 @@ function hitpiece(p,pos)
  end
 end
 
-function detonate(pos, d)
- local p0 = -mapsize --fish
+function detonate(pos, src, d)
  local p1 = -1
  local p2 = 1
  if(d == up) then
-  p0 = 1
   p1 = -mapsize
   p2 = mapsize
  end
  
- --destroy tiles at p0, p1, p2
+ --destroy tiles at pos, p1, p2
  destroytile(pos)
- destroytile(pos+p0)
  destroytile(pos+p1)
  destroytile(pos+p2)
+ destroytile(src)
  
  --todo: special effect
 end
